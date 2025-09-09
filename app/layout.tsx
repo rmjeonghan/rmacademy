@@ -7,8 +7,8 @@ import { authOptions } from "./api/auth/[...nextauth]/route";
 import Sidebar from "@/components/layout/Sidebar";
 import AuthProvider from "@/components/AuthProvider";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const lexend = Lexend({ subsets: ["latin"], variable: "--font-lexend" });
+const inter = Inter({ subsets: ["latin"], display: 'swap', variable: "--font-inter" });
+const lexend = Lexend({ subsets: ["latin"], display: 'swap', variable: "--font-lexend" });
 
 export const metadata: Metadata = {
   title: "RuleMakers 관리자 시스템",
@@ -24,18 +24,14 @@ export default async function RootLayout({
 
   return (
     <html lang="ko">
-      <body className={`${inter.variable} ${lexend.variable} font-sans bg-slate-100`}>
+      <body className={`${inter.variable} ${lexend.variable} font-sans`}>
         <AuthProvider>
-          {session ? (
-            <div className="flex h-screen">
-              <Sidebar session={session} />
-              <main className="flex-1 flex flex-col overflow-hidden">
-                {children}
-              </main>
-            </div>
-          ) : (
-            children
-          )}
+          <div className="flex h-screen bg-slate-50">
+            {session && <Sidebar session={session} />}
+            <main className="flex-1 flex flex-col overflow-hidden">
+              {children}
+            </main>
+          </div>
         </AuthProvider>
       </body>
     </html>
