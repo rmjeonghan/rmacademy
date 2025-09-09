@@ -38,8 +38,8 @@ export const authOptions: NextAuthOptions = {
         return true; // 등록된 학원 관리자, 로그인 승인
       }
 
-      // 3. 권한 없는 사용자 로그인 거부
-      return false; 
+      // 3. 권한 없는 사용자 로그인 거부 시, 에러 메시지와 함께 리디렉션
+      return '/login?error=PermissionDenied'; 
     },
 
     // jwt 콜백: JWT 토큰에 역할, 학원 정보 추가
@@ -69,7 +69,7 @@ export const authOptions: NextAuthOptions = {
     // session 콜백: 클라이언트 세션 객체에 역할, 학원 정보 추가
     async session({ session, token }) {
       if (session.user) {
-        session.user.role = token.role as string;
+        session.user.role = token.role as "superadmin" | "academyadmin";
         session.user.academyId = token.academyId as string;
         session.user.academyName = token.academyName as string;
       }
@@ -85,4 +85,3 @@ export const authOptions: NextAuthOptions = {
 const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };
-

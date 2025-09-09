@@ -19,7 +19,7 @@ declare module "next-auth" {
 export interface Academy {
   id: string;
   name: string;
-  adminEmail: string;
+  adminEmail: string; // 학원 관리자 이메일
   createdAt: Timestamp;
   isDeleted: boolean;
 }
@@ -84,4 +84,3 @@ export interface Chapter {
 export interface Curriculum {
     [subject: string]: Chapter[]; // 예: "통합과학 1": [...]
 }
-

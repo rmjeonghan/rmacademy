@@ -1,26 +1,16 @@
-'use client';
+// /app/page.tsx
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+import { authOptions } from "./api/auth/[...nextauth]/route";
 
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+export default async function Home() {
+  const session = await getServerSession(authOptions);
 
-export default function HomePage() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
+  if (session) {
+    redirect("/dashboard");
+  } else {
+    redirect("/login");
+  }
 
-  useEffect(() => {
-    if (status === 'authenticated') {
-      router.replace('/dashboard');
-    } else if (status === 'unauthenticated') {
-      router.replace('/login');
-    }
-  }, [status, router]);
-
-  // 세션 확인 중 로딩 상태 표시
-  return (
-    <div className="flex h-screen items-center justify-center">
-      <LoadingSpinner />
-    </div>
-  );
+  return null; // 리디렉션이 발생하므로 아무것도 렌더링하지 않음
 }

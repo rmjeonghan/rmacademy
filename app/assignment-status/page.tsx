@@ -28,7 +28,10 @@ export default function AssignmentStatusPage() {
         if (isSuperAdmin) {
             onSnapshot(collection(db, "academies"), snap => setAcademies(snap.docs.map(d=>({id: d.id, ...d.data()} as Academy))));
         } else {
-            setSelectedAcademyId(session.user.academyId!);
+            // academyId가 있을 때만 상태 업데이트
+            if (session.user.academyId) {
+                setSelectedAcademyId(session.user.academyId);
+            }
         }
     }, [session, isSuperAdmin]);
 
@@ -58,7 +61,7 @@ export default function AssignmentStatusPage() {
         const assignmentQuery = query(collection(db, "academyAssignments"), where("classId", "==", selectedClassId));
         const unsubAssignments = onSnapshot(assignmentQuery, snap => {
             const data = snap.docs.map(d => ({id:d.id, ...d.data()} as Assignment));
-            data.sort((a,b) => a.dueDate.toMillis() - b.dueDate.toMillis());
+            data.sort((a,b) => a.dueDate.toMillis() - b.createdAt.toMillis()); // 생성일 대신 마감일 기준으로 정렬
             setAssignments(data);
         });
 
@@ -78,13 +81,13 @@ export default function AssignmentStatusPage() {
     const submissionMap = new Map(submissions.map(s => `${s.userId}_${s.assignmentId}`));
     
     return (
-         <div className="p-8 overflow-y-auto h-full">
+         <div className="p-8 overflow-y-auto h-full bg-gray-50">
             <header className="mb-8">
                 <h1 className="text-3xl font-bold font-lexend text-slate-800">과제 현황</h1>
                 <p className="mt-2 text-md text-slate-500">학생들의 과제 제출 현황을 간결하게 확인합니다.</p>
             </header>
             
-            <div className="bg-white p-6 rounded-lg shadow-sm mb-6 flex gap-4">
+            <div className="bg-white p-6 rounded-lg shadow-sm mb-6 flex gap-4 border border-slate-200">
                 {isSuperAdmin && (
                     <div>
                         <label className="form-label">학원 선택</label>
@@ -104,38 +107,48 @@ export default function AssignmentStatusPage() {
             </div>
 
             {selectedClassId ? (
-                <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200 text-center">
-                        <thead className="bg-slate-50">
-                            <tr>
-                                <th className="sticky left-0 bg-slate-50 z-10 px-2 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">학생 이름</th>
-                                {assignments.map(assign => (
-                                    <th key={assign.id} className="px-2 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider" title={assign.title}>
-                                        {assign.dayTitle.replace(' 과제', '')}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                         <tbody className="bg-white divide-y divide-slate-200">
-                            {students.map(student => (
-                                <tr key={student.id}>
-                                    <td className="sticky left-0 bg-white text-left px-2 py-3 whitespace-nowrap text-sm font-semibold text-slate-800">{student.studentName}</td>
-                                    {assignments.map(assign => {
-                                        const submitted = submissionMap.has(`${student.id}_${assign.id}`);
-                                        return (
-                                            <td key={assign.id} className="px-2 py-3">
-                                                {submitted ? <span className="text-green-600 font-bold">✅</span> : <span className="text-red-500">❌</span>}
-                                            </td>
-                                        )
-                                    })}
+                <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-slate-200 text-center">
+                            <thead className="bg-slate-50">
+                                <tr>
+                                    <th className="sticky left-0 bg-slate-50 z-20 px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider min-w-[120px]">학생 이름</th>
+                                    {assignments.map(assign => (
+                                        <th key={assign.id} className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider min-w-[80px]" title={`${assign.title} (${new Date(assign.dueDate.toMillis()).toLocaleDateString('ko-KR')})`}>
+                                            {assign.dayTitle.replace(' 과제', '')} <br/>
+                                            <span className="font-normal text-gray-400 text-[10px]">{new Date(assign.dueDate.toMillis()).toLocaleDateString('ko-KR').slice(5)}</span> {/* 월/일만 표시 */}
+                                        </th>
+                                    ))}
                                 </tr>
-                            ))}
-                         </tbody>
-                    </table>
+                            </thead>
+                             <tbody className="bg-white divide-y divide-slate-200">
+                                {students.length > 0 ? students.map(student => (
+                                    <tr key={student.id} className="hover:bg-slate-50">
+                                        <td className="sticky left-0 bg-white text-left px-4 py-3 whitespace-nowrap text-sm font-semibold text-slate-800 border-r border-slate-100">{student.studentName}</td>
+                                        {assignments.map(assign => {
+                                            const submitted = submissionMap.has(`${student.id}_${assign.id}`);
+                                            return (
+                                                <td key={assign.id} className="px-4 py-3">
+                                                    {submitted ? <span className="text-green-600 font-bold text-lg">✅</span> : <span className="text-red-500 text-lg">❌</span>}
+                                                </td>
+                                            )
+                                        })}
+                                    </tr>
+                                )) : (
+                                     <tr>
+                                        <td colSpan={assignments.length + 1} className="py-8 text-center text-slate-500">
+                                            등록된 학생이 없거나, 선택된 수업에 학생이 없습니다.
+                                        </td>
+                                    </tr>
+                                )}
+                             </tbody>
+                        </table>
+                    </div>
                 </div>
             ) : (
-                <div className="bg-white rounded-lg shadow-sm p-16 text-center text-slate-500">
-                    <p>현황을 보려면 학원과 수업을 선택해주세요.</p>
+                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-16 text-center text-slate-500">
+                    <p className="text-lg">현황을 보려면 학원과 수업을 선택해주세요.</p>
+                    <p className="mt-2 text-sm text-gray-400">학원 관리자는 소속된 학원의 수업만 선택할 수 있습니다.</p>
                 </div>
             )}
         </div>

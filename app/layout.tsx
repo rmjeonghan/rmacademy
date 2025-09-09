@@ -1,18 +1,29 @@
 // /app/layout.tsx
-import type { Metadata } from "next";
-import { Inter, Lexend } from "next/font/google";
-import "./globals.css";
-import { getServerSession } from "next-auth";
-import { authOptions } from "./api/auth/[...nextauth]/route";
-import Sidebar from "@/components/layout/Sidebar";
-import AuthProvider from "@/components/AuthProvider";
+import './globals.css';
+import { Noto_Sans_KR, Lexend } from 'next/font/google';
+import AuthProvider from '@/components/AuthProvider';
+import Sidebar from '@/components/layout/Sidebar';
+import { getServerSession } from 'next-auth';
+import { authOptions } from './api/auth/[...nextauth]/route';
 
-const inter = Inter({ subsets: ["latin"], display: 'swap', variable: "--font-inter" });
-const lexend = Lexend({ subsets: ["latin"], display: 'swap', variable: "--font-lexend" });
+// 폰트 설정
+const notoSansKR = Noto_Sans_KR({
+  subsets: ['latin'],
+  weight: ['400', '500', '700'],
+  variable: '--font-noto-sans-kr', // CSS 변수 이름 지정
+  display: 'swap',
+});
 
-export const metadata: Metadata = {
-  title: "RuleMakers 관리자 시스템",
-  description: "RuleMakers 통합 및 학원 관리자 대시보드",
+const lexend = Lexend({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-lexend', // CSS 변수 이름 지정
+  display: 'swap',
+});
+
+export const metadata = {
+  title: 'RuleMakers Admin',
+  description: 'RuleMakers 통합/학원 관리 시스템',
 };
 
 export default async function RootLayout({
@@ -23,18 +34,22 @@ export default async function RootLayout({
   const session = await getServerSession(authOptions);
 
   return (
-    <html lang="ko">
-      <body className={`${inter.variable} ${lexend.variable} font-sans`}>
+    // <html> 태그에 폰트 변수를 적용합니다.
+    <html lang="ko" className={`${notoSansKR.variable} ${lexend.variable}`}>
+      <body>
         <AuthProvider>
-          <div className="flex h-screen bg-slate-50">
-            {session && <Sidebar session={session} />}
-            <main className="flex-1 flex flex-col overflow-hidden">
-              {children}
-            </main>
-          </div>
+          {session ? (
+            <div className="flex h-screen bg-gray-50">
+              <Sidebar session={session} />
+              <main className="flex-1 overflow-y-auto">
+                {children}
+              </main>
+            </div>
+          ) : (
+            children
+          )}
         </AuthProvider>
       </body>
     </html>
   );
 }
-
