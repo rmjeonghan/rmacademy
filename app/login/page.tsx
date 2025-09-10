@@ -3,21 +3,25 @@
 
 import { signIn } from 'next-auth/react';
 import { FcGoogle } from 'react-icons/fc';
+import Image from "next/image"; // Image 컴포넌트 import
 
 export default function LoginPage() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-slate-50">
       <div className="text-center p-10 bg-white rounded-2xl shadow-xl max-w-sm w-full">
-        <img
-          src="/logo_with_text.png" // public 폴더에 로고 이미지 필요
+        <Image
+          src="/rmlogo.png" // 이 부분을 "/rmlogo.png"로 변경합니다.
           alt="RuleMakers Logo"
-          className="mx-auto mb-8 h-20"
+          width={100} // 원본 이미지의 실제 너비를 확인하고 조정하세요.
+          height={100}  // 원본 이미지의 실제 높이를 확인하고 조정하세요.
+          className="mx-auto mb-8"
+          priority
         />
         <h1 className="text-2xl font-bold font-lexend text-slate-800">
           관리자 시스템 로그인
         </h1>
         <p className="text-slate-600 mb-8 mt-2">
-          관리자 계정으로 로그인해주세요.
+          등록된 관리자 계정으로 로그인해주세요.
         </p>
         <button
           onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
@@ -30,4 +34,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

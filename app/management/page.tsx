@@ -1,4 +1,4 @@
-// /app/management/page.tsx (개선된 버전)
+// /app/management/page.tsx (수업 지정 기능 추가 버전)
 'use client';
 
 import { useSession } from "next-auth/react";
@@ -27,6 +27,10 @@ export default function ManagementPage() {
   const [selectedAcademyIdForStudents, setSelectedAcademyIdForStudents] = useState('');
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingItemName, setEditingItemName] = useState("");
+  
+  // ✅ 학생 승인 시 수업 지정을 위한 State 추가
+  const [selectedClassForStudent, setSelectedClassForStudent] = useState<Record<string, string>>({});
+
 
   const fetchData = useCallback(async () => {
     if (!session) return;
@@ -38,7 +42,6 @@ export default function ManagementPage() {
             const snapshot = await getDocs(q);
             setAcademies(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Academy)));
         } else if (session.user.academyId) {
-            // 학원 관리자: 수업 및 승인 대기 학생 목록 로드
             const classesQuery = query(collection(db, "classes"), where("academyId", "==", session.user.academyId), where("isDeleted", "==", false), orderBy("name"));
             const classesSnapshot = await getDocs(classesQuery);
             setClasses(classesSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Class)));
@@ -58,7 +61,6 @@ export default function ManagementPage() {
     fetchData();
   }, [fetchData]);
 
-  // 학생 목록 로딩 (선택된 학원 ID가 변경될 때)
   useEffect(() => {
     const fetchStudents = async () => {
       const targetAcademyId = isSuperAdmin ? selectedAcademyIdForStudents : session?.user.academyId;
@@ -80,14 +82,13 @@ export default function ManagementPage() {
     fetchStudents();
   }, [session, isSuperAdmin, selectedAcademyIdForStudents]);
 
-  // 핸들러 함수들
   const handleAddAcademy = useCallback(async () => {
     if (!newAcademyName.trim() || !newAcademyEmail.trim()) return alert("학원 이름과 관리자 이메일을 모두 입력해주세요.");
     await addDoc(collection(db, "academies"), {
       name: newAcademyName, adminEmail: newAcademyEmail, createdAt: serverTimestamp(), isDeleted: false
     });
     setNewAcademyName(""); setNewAcademyEmail("");
-    fetchData(); // 데이터 새로고침
+    fetchData();
   }, [newAcademyName, newAcademyEmail, fetchData]);
 
   const handleAddClass = useCallback(async () => {
@@ -96,14 +97,34 @@ export default function ManagementPage() {
       academyId: session.user.academyId, name: newClassName, createdAt: serverTimestamp(), isDeleted: false
     });
     setNewClassName("");
-    fetchData(); // 데이터 새로고침
+    fetchData();
   }, [newClassName, session, fetchData]);
   
-  const handleStudentStatus = useCallback(async (studentId: string, status: 'active' | 'rejected') => {
+  // ✅ handleStudentStatus 함수 수정: classId를 인자로 받도록 변경
+  const handleStudentStatus = useCallback(async (studentId: string, status: 'active' | 'rejected', classId?: string) => {
       const studentRef = doc(db, "students", studentId);
-      const updateData = status === 'rejected' ? { status, academyId: null, classId: null } : { status };
+      let updateData: any = { status };
+
+      if (status === 'active') {
+          if (!classId) {
+              alert("학생을 승인하려면 반드시 수업을 선택해야 합니다.");
+              return;
+          }
+          updateData.classId = classId;
+      } else if (status === 'rejected') {
+          updateData.academyId = null;
+          updateData.classId = null;
+      }
+      
       await updateDoc(studentRef, updateData);
-      fetchData(); // 승인 대기 목록 새로고침
+      
+      // 상태 업데이트 후 목록에서 제거하고 다시 로드
+      setSelectedClassForStudent(prev => {
+          const newState = { ...prev };
+          delete newState[studentId];
+          return newState;
+      });
+      fetchData();
   }, [fetchData]);
   
   const handleDeleteStudent = useCallback(async (studentId: string) => {
@@ -114,7 +135,6 @@ export default function ManagementPage() {
       subsSnap.forEach(d => batch.delete(d.ref));
       batch.delete(doc(db, "students", studentId));
       await batch.commit();
-      // 학생 목록 UI에서 즉시 제거
       setActiveStudents(prev => prev.filter(s => s.id !== studentId));
   }, []);
 
@@ -124,6 +144,11 @@ export default function ManagementPage() {
     fetchData();
   }, [fetchData]);
 
+  const handleEditItem = useCallback((id: string, name: string) => {
+    setEditingItemId(id);
+    setEditingItemName(name);
+  }, []);
+
   const handleUpdateItem = useCallback(async (type: 'academy' | 'class') => {
     if (!editingItemId || !editingItemName.trim()) return;
     await updateDoc(doc(db, type === 'academy' ? "academies" : "classes", editingItemId), { name: editingItemName });
@@ -131,39 +156,15 @@ export default function ManagementPage() {
     fetchData();
   }, [editingItemId, editingItemName, fetchData]);
 
-  const renderItemList = (items: (Academy | Class)[], type: 'academy' | 'class') => (
-    <div className="space-y-3">
-      {items.map(item => (
-        <div key={item.id} className="flex justify-between items-center p-3 bg-slate-50 border border-slate-200 rounded-lg">
-          {editingItemId === item.id ? (
-            <input
-              type="text"
-              value={editingItemName}
-              onChange={(e) => setEditingItemName(e.target.value)}
-              className="form-input py-1 text-sm"
-            />
-          ) : (
-            <span className="text-slate-700">{item.name} {type === 'academy' && `(${(item as Academy).adminEmail})`}</span>
-          )}
-          <div className="space-x-2">
-            {editingItemId === item.id ? (
-              <>
-                <button onClick={() => handleUpdateItem(type)} className="text-green-600 hover:text-green-800 p-1 rounded hover:bg-green-100 transition-colors"><FiSave /></button>
-                <button onClick={() => setEditingItemId(null)} className="text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-100 transition-colors"><FiX /></button>
-              </>
-            ) : (
-              <>
-                <button onClick={() => handleEditItem(item.id, item.name)} className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-100 transition-colors"><FiEdit /></button>
-                <button onClick={() => handleDeleteItem(type, item.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-100 transition-colors"><FiTrash2 /></button>
-              </>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  // ✅ 학생별로 선택된 수업 ID를 변경하는 핸들러
+  const handleClassSelectionChange = (studentId: string, classId: string) => {
+    setSelectedClassForStudent(prev => ({
+        ...prev,
+        [studentId]: classId
+    }));
+  };
 
-return (
+  return (
     <div className="p-8 overflow-y-auto h-full bg-gray-50">
       <header className="mb-8 flex justify-between items-center">
         <div>
@@ -204,20 +205,60 @@ return (
 
             <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
               <h2 className="text-xl font-semibold mb-4 text-slate-800">{isSuperAdmin ? "등록된 학원 목록" : "등록된 수업 목록"}</h2>
-              {isSuperAdmin ? renderItemList(academies, 'academy') : renderItemList(classes, 'class')}
+              <div className="space-y-3">
+                {(isSuperAdmin ? academies : classes).map(item => (
+                  <div key={item.id} className="flex justify-between items-center p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    {editingItemId === item.id ? (
+                      <input
+                        type="text"
+                        value={editingItemName}
+                        onChange={(e) => setEditingItemName(e.target.value)}
+                        className="form-input py-1 text-sm"
+                        autoFocus
+                      />
+                    ) : (
+                      <span className="text-slate-700">{item.name} {isSuperAdmin && `(${(item as Academy).adminEmail})`}</span>
+                    )}
+                    <div className="space-x-2 flex items-center">
+                      {editingItemId === item.id ? (
+                        <>
+                          <button onClick={() => handleUpdateItem(isSuperAdmin ? 'academy' : 'class')} className="text-green-600 hover:text-green-800 p-1 rounded hover:bg-green-100 transition-colors" title="저장"><FiSave /></button>
+                          <button onClick={() => setEditingItemId(null)} className="text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-100 transition-colors" title="취소"><FiX /></button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => handleEditItem(item.id, item.name)} className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-100 transition-colors" title="수정"><FiEdit /></button>
+                          <button onClick={() => handleDeleteItem(isSuperAdmin ? 'academy' : 'class', item.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-100 transition-colors" title="삭제"><FiTrash2 /></button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
+            {/* ✅ 신규 학생 승인 대기 UI 수정 */}
             {!isSuperAdmin && (
               <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
                 <h2 className="text-xl font-semibold mb-4 text-slate-800">신규 학생 승인 대기</h2>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {pendingStudents.length > 0 ? pendingStudents.map(student => (
-                    <div key={student.id} className="flex justify-between items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <span className="font-medium text-slate-700">{student.studentName}</span>
-                      <div className="space-x-2">
-                        <button onClick={() => handleStudentStatus(student.id, 'active')} className="p-2 text-green-600 hover:bg-green-100 rounded-full transition-colors" title="승인"><FiUserCheck /></button>
-                        <button onClick={() => handleStudentStatus(student.id, 'rejected')} className="p-2 text-red-600 hover:bg-red-100 rounded-full transition-colors" title="거절"><FiUserX /></button>
+                    <div key={student.id} className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-slate-700">{student.studentName}</span>
+                        <div className="space-x-2">
+                          <button onClick={() => handleStudentStatus(student.id, 'active', selectedClassForStudent[student.id])} className="p-2 text-green-600 hover:bg-green-100 rounded-full transition-colors" title="승인"><FiUserCheck /></button>
+                          <button onClick={() => handleStudentStatus(student.id, 'rejected')} className="p-2 text-red-600 hover:bg-red-100 rounded-full transition-colors" title="거절"><FiUserX /></button>
+                        </div>
                       </div>
+                      <select 
+                        value={selectedClassForStudent[student.id] || ""} 
+                        onChange={(e) => handleClassSelectionChange(student.id, e.target.value)}
+                        className="form-select text-sm"
+                      >
+                          <option value="">수업을 선택해주세요</option>
+                          {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
                     </div>
                   )) : <p className="text-sm text-center text-gray-500 py-4">승인 대기중인 학생이 없습니다.</p>}
                 </div>
