@@ -56,14 +56,21 @@ export interface Assignment {
 
 export interface Submission {
     id: string;
-    userId: string;
-    assignmentId?: string; // 과제인 경우
-    mainChapter: string;
+    userId?: string; // 자율학습(submissions) 기록용
+    studentId?: string; // 과제(studentAssignments) 기록용
+    assignmentId?: string;
+    classId?: string; 
+    mainChapter?: string;
     questionIds: string[];
     answers: (number | null)[];
     score: number;
-    createdAt: Timestamp;
-    isDeleted: boolean;
+    createdAt?: Timestamp; // submissions 컬렉션용
+    completedAt?: Timestamp; // studentAssignments 컬렉션용
+    isDeleted?: boolean;
+    // studentAssignments에서 오는 추가 필드
+    academyId?: string;
+    academyName?: string;
+    isCompleted?: boolean;
 }
 
 // 문제 은행 및 단원 구조

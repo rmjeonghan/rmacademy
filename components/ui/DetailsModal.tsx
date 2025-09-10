@@ -10,6 +10,7 @@ interface DetailsModalProps {
 
 export default function DetailsModal({ submission, student, questions, onClose }: DetailsModalProps) {
     if (!submission) return null;
+    const questionIds = submission.questionIds || [];
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4 animate-fade-in">
@@ -19,7 +20,7 @@ export default function DetailsModal({ submission, student, questions, onClose }
                     <button onClick={onClose} className="text-slate-400 hover:text-slate-800 text-3xl font-light">&times;</button>
                 </header>
                 <div className="p-6 overflow-y-auto space-y-4">
-                    {submission.questionIds.map((qId: string, index: number) => {
+                    {questionIds.map((qId: string, index: number) => {
                         const question = questions[qId];
                         if (!question) return (
                             <div key={index} className="p-4 rounded-lg bg-slate-100 text-sm text-slate-500">

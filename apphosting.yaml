@@ -1,0 +1,29 @@
+# apphosting.yaml
+
+# Next.js 런타임 설정
+run:
+  # NextAuth.js는 서버에서 실행되므로, 런타임에 환경 변수가 필요합니다.
+  env:
+    # NEXTAUTH_URL은 비밀이 아니므로 여기에 직접 작성합니다.
+    - variable: NEXTAUTH_URL
+      value: "https://rmacademy-admin.web.app"
+    # 비밀 값들은 Secret Manager를 통해 안전하게 참조합니다.
+    - variable: GOOGLE_CLIENT_ID
+      secret: GOOGLE_CLIENT_ID
+    - variable: GOOGLE_CLIENT_SECRET
+      secret: GOOGLE_CLIENT_SECRET
+    - variable: NEXTAUTH_SECRET
+      secret: NEXTAUTH_SECRET
+
+# Next.js 빌드 설정
+build:
+  # Next.js는 빌드 시점에도 환경 변수를 참조할 수 있습니다.
+  env:
+    - variable: NEXTAUTH_URL
+      value: "https://rmacademy-admin.web.app"
+    - variable: GOOGLE_CLIENT_ID
+      secret: GOOGLE_CLIENT_ID
+    - variable: GOOGLE_CLIENT_SECRET
+      secret: GOOGLE_CLIENT_SECRET
+    - variable: NEXTAUTH_SECRET
+      secret: NEXTAUTH_SECRET

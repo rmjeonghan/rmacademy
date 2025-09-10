@@ -1,19 +1,46 @@
 // /app/login/page.tsx
 'use client';
 
-import { signIn } from 'next-auth/react';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { useAuth } from '@/context/AuthContext';
 import { FcGoogle } from 'react-icons/fc';
-import Image from "next/image"; // Image 컴포넌트 import
+import Image from "next/image";
 
 export default function LoginPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && user) {
+      router.push('/dashboard'); // 로그인 후 대시보드로 이동
+    }
+  }, [user, loading, router]);
+
+  const handleGoogleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Google Sign-In Error", error);
+      alert("로그인 중 오류가 발생했습니다.");
+    }
+  };
+
+  if (loading || user) {
+    return <div>Loading...</div>;
+  }
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-slate-50">
       <div className="text-center p-10 bg-white rounded-2xl shadow-xl max-w-sm w-full">
         <Image
-          src="/rmlogo.png" // 이 부분을 "/rmlogo.png"로 변경합니다.
+          src="/rmlogo.png"
           alt="RuleMakers Logo"
-          width={100} // 원본 이미지의 실제 너비를 확인하고 조정하세요.
-          height={100}  // 원본 이미지의 실제 높이를 확인하고 조정하세요.
+          width={100}
+          height={100}
           className="mx-auto mb-8"
           priority
         />
@@ -24,11 +51,11 @@ export default function LoginPage() {
           등록된 관리자 계정으로 로그인해주세요.
         </p>
         <button
-          onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
-          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg shadow-sm flex items-center justify-center text-base font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          onClick={handleGoogleSignIn}
+          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg shadow-sm flex items-center justify-center text-base font-medium text-slate-700 hover:bg-slate-50 transition-colors"
         >
-          <FcGoogle className="w-6 h-6 mr-3" />
-          <span>Google 계정으로 로그인</span>
+          <FcGoogle className="mr-3 text-2xl" />
+          Google 계정으로 로그인
         </button>
       </div>
     </div>

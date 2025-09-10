@@ -1,23 +1,21 @@
 // /app/layout.tsx
 import './globals.css';
 import { Noto_Sans_KR, Lexend } from 'next/font/google';
-import AuthProvider from '@/components/AuthProvider';
-import Sidebar from '@/components/layout/Sidebar';
-import { getServerSession } from 'next-auth';
-import { authOptions } from './api/auth/[...nextauth]/route';
+import { AuthProvider } from '@/context/AuthContext'; // 👈 1. AuthProvider 경로를 context 폴더로 변경
+import PageWrapper from '@/components/layout/PageWrapper'; // 👈 2. 새로 만들 PageWrapper import
 
-// 폰트 설정
+// 폰트 설정 (기존과 동일)
 const notoSansKR = Noto_Sans_KR({
   subsets: ['latin'],
   weight: ['400', '500', '700'],
-  variable: '--font-noto-sans-kr', // CSS 변수 이름 지정
+  variable: '--font-noto-sans-kr',
   display: 'swap',
 });
 
 const lexend = Lexend({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
-  variable: '--font-lexend', // CSS 변수 이름 지정
+  variable: '--font-lexend',
   display: 'swap',
 });
 
@@ -26,28 +24,20 @@ export const metadata = {
   description: 'RuleMakers 통합/학원 관리 시스템',
 };
 
-export default async function RootLayout({
+// ❗ async 키워드 제거, session 관련 코드 제거
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession(authOptions);
-
   return (
-    // <html> 태그에 폰트 변수를 적용합니다.
     <html lang="ko" className={`${notoSansKR.variable} ${lexend.variable}`}>
       <body>
         <AuthProvider>
-          {session ? (
-            <div className="flex h-screen bg-gray-50">
-              <Sidebar session={session} />
-              <main className="flex-1 overflow-y-auto">
-                {children}
-              </main>
-            </div>
-          ) : (
-            children
-          )}
+          {/* 👈 3. PageWrapper가 레이아웃을 담당하도록 변경 */}
+          <PageWrapper>
+            {children}
+          </PageWrapper>
         </AuthProvider>
       </body>
     </html>

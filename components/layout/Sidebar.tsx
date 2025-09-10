@@ -1,21 +1,25 @@
-// /components/layout/Sidebar.tsx
+// /components/layout/Sidebar.tsx (최종 수정 버전 - 메뉴 단순화)
 'use client';
 
-import { Session } from "next-auth";
-import { signOut } from "next-auth/react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { FiGrid, FiUsers, FiBookOpen, FiCheckSquare, FiLogOut } from "react-icons/fi";
+import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
+import { FiGrid, FiUsers, FiBookOpen, FiCheckSquare, FiLogOut } from 'react-icons/fi'; // 👈 FiFileText 아이콘 제거
+import { auth } from '@/lib/firebase';
+import { CustomUser } from '@/context/AuthContext';
 
 interface SidebarProps {
-  session: Session;
+  session: {
+    user: CustomUser | null;
+  };
 }
 
 export default function Sidebar({ session }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user } = session;
   const isSuperAdmin = user?.role === 'superadmin';
 
+  // 🔽 '전체 결과 보기' 메뉴를 제거하여 navLinks를 단순화했습니다. 🔽
   const navLinks = [
     { href: "/dashboard", icon: FiGrid, label: "결과 대시보드" },
     { 
@@ -30,6 +34,15 @@ export default function Sidebar({ session }: SidebarProps) {
     },
     { href: "/assignment-status", icon: FiCheckSquare, label: "과제 현황" },
   ];
+  
+  const handleSignOut = async () => {
+    try {
+      await auth.signOut();
+      router.push('/login');
+    } catch (error) {
+      console.error('Sign out error', error);
+    }
+  };
 
   return (
     <div className="w-64 bg-white text-slate-700 flex flex-col border-r border-slate-200 shadow-md">
@@ -57,11 +70,11 @@ export default function Sidebar({ session }: SidebarProps) {
         ))}
       </nav>
       <div className="p-5 border-t border-slate-200">
-        <p className="text-sm truncate text-slate-600 mb-2" title={isSuperAdmin ? user?.name || '관리자' : user?.academyName || '학원 관리자'}>
-          {isSuperAdmin ? user?.name || '관리자' : user?.academyName || '학원 관리자'}
+        <p className="text-sm truncate text-slate-600 mb-2" title={isSuperAdmin ? user?.displayName || '관리자' : user?.academyName || '학원 관리자'}>
+          {isSuperAdmin ? user?.displayName || '관리자' : user?.academyName || '학원 관리자'}
         </p>
         <button
-          onClick={() => signOut({ callbackUrl: '/login' })}
+          onClick={handleSignOut}
           className="w-full btn-danger"
         >
           <FiLogOut className="w-4 h-4 mr-2" />
@@ -71,3 +84,4 @@ export default function Sidebar({ session }: SidebarProps) {
     </div>
   );
 }
+
