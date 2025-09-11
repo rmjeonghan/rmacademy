@@ -1,4 +1,4 @@
-// tailwind.config.ts
+// tailwind.config.ts (원본)
 
 import type { Config } from 'tailwindcss'
 
