@@ -1,35 +1,51 @@
-// /app/assignment-status/page.tsx (상세 보기 기능 완전 복원 최종 버전)
 'use client';
 
 import React, { useState, useEffect, useMemo } from "react";
-import { collection, query, where, onSnapshot, getDocs, collectionGroup, limit } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Academy, Class, Student, Assignment, Submission, Question } from "@/types";
+import { Academy, Class, Student, Assignment, Question, Submission } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import DetailsModal from "@/components/ui/DetailsModal";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
-import { FiFileText } from "react-icons/fi";
+import { FiFileText, FiChevronLeft, FiChevronRight } from "react-icons/fi";
+
+interface StudentAssignment {
+    id: string;
+    studentId: string;
+    assignmentId: string;
+    classId: string;
+    academyId: string;
+    academyName: string;
+    isCompleted: boolean;
+    completedAt: any; // Timestamp
+    score: string; // "8/10"과 같은 문자열 형식
+    questionIds: string[];
+    answers: (number | null)[];
+}
 
 export default function AssignmentStatusPage() {
     const { user, loading: authLoading } = useAuth();
     const isSuperAdmin = user?.role === 'superadmin';
 
-    // 데이터
+    // 데이터 상태
     const [academies, setAcademies] = useState<Academy[]>([]);
     const [classes, setClasses] = useState<Class[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [assignments, setAssignments] = useState<Assignment[]>([]);
-    const [submissions, setSubmissions] = useState<Submission[]>([]);
+    const [studentAssignments, setStudentAssignments] = useState<StudentAssignment[]>([]);
     const [questions, setQuestions] = useState<Record<string, Question>>({});
     
     // UI 상태
     const [loading, setLoading] = useState(true);
     const [selectedAcademyId, setSelectedAcademyId] = useState('');
     const [selectedClassId, setSelectedClassId] = useState('');
-    const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+    const [selectedData, setSelectedData] = useState<Submission | null>(null);
     const [isModalLoading, setIsModalLoading] = useState(false);
+    // 📌 [추가] 페이지네이션 상태 추가
+    const [currentPage, setCurrentPage] = useState(1);
+    const [assignmentsPerPage] = useState(10); // 한 페이지에 표시할 과제 수
 
-    // 학원 목록 로딩
+    // 학원 목록 로딩 (기존과 동일)
     useEffect(() => {
         if (!user) return;
         if (isSuperAdmin) {
@@ -40,7 +56,7 @@ export default function AssignmentStatusPage() {
         }
     }, [user, isSuperAdmin]);
 
-    // 학원 선택 시 수업 목록 로드
+    // 학원 선택 시 수업 목록 로드 (기존과 동일)
     useEffect(() => {
         if (!selectedAcademyId) {
             setClasses([]);
@@ -52,66 +68,66 @@ export default function AssignmentStatusPage() {
         return () => unsubscribe();
     }, [selectedAcademyId]);
 
-    // 수업 선택 시 데이터 로드 (컬렉션 그룹 쿼리 사용)
+    // 수업 선택 시 데이터 로드 (기존과 동일)
     useEffect(() => {
         if (!selectedClassId) {
-            setStudents([]); setAssignments([]); setSubmissions([]); setLoading(false);
+            setStudents([]); 
+            setAssignments([]); 
+            setStudentAssignments([]); 
+            setLoading(false);
             return;
         }
         setLoading(true);
         const studentQuery = query(collection(db, "students"), where("classId", "==", selectedClassId), where("isDeleted", "==", false), where("status", "==", "active"));
         const assignQuery = query(collection(db, "academyAssignments"), where("classId", "==", selectedClassId));
-        const subQuery = query(collectionGroup(db, 'studentAssignments'), where('classId', '==', selectedClassId));
+        const subQuery = query(collection(db, 'studentAssignments'), where('classId', '==', selectedClassId));
 
         const unsubStudents = onSnapshot(studentQuery, snap => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Student))));
         const unsubAssigns = onSnapshot(assignQuery, snap => setAssignments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Assignment))));
         const unsubSubs = onSnapshot(subQuery, snap => {
-            setSubmissions(snap.docs.map(d => ({ id: d.id, ...d.data() } as Submission)));
+            setStudentAssignments(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentAssignment)));
             setLoading(false);
         }, (error) => {
-            console.error("제출 기록 조회 실패 (Firestore 색인이 필요할 수 있습니다): ", error); setLoading(false);
+            console.error("제출 기록 조회 실패 (Firestore 색인이 필요할 수 있습니다): ", error); 
+            setLoading(false);
         });
         
         return () => { unsubStudents(); unsubAssigns(); unsubSubs(); };
     }, [selectedClassId]);
 
-    const submissionMap = useMemo(() => {
-        const map = new Map<string, Submission>();
-        submissions.forEach(sub => {
-            const studentIdentifier = sub.studentId || sub.userId;
-            if (studentIdentifier && sub.assignmentId) {
-                map.set(`${studentIdentifier}_${sub.assignmentId}`, sub);
+    const studentAssignmentMap = useMemo(() => {
+        const map = new Map<string, StudentAssignment>();
+        studentAssignments.forEach(sa => {
+            if (sa.studentId && sa.assignmentId) {
+                map.set(`${sa.studentId}_${sa.assignmentId}`, sa);
             }
         });
         return map;
-    }, [submissions]);
+    }, [studentAssignments]);
 
-    // --- 👇 상세 보기 핸들러 수정 ---
-    const handleShowDetails = async (studentId?: string, assignmentId?: string) => {
-        if (!studentId || !assignmentId) return;
+    // --- 👇 [추가] 페이지네이션을 위한 과제 목록 계산 ---
+    const sortedAssignments = useMemo(() => {
+        return [...assignments].sort((a, b) => a.dueDate.toMillis() - b.dueDate.toMillis());
+    }, [assignments]);
 
-        setIsModalLoading(true); // 모달 로딩 시작
+    const paginatedAssignments = useMemo(() => {
+        const indexOfLastAssignment = currentPage * assignmentsPerPage;
+        const indexOfFirstAssignment = indexOfLastAssignment - assignmentsPerPage;
+        return sortedAssignments.slice(indexOfFirstAssignment, indexOfLastAssignment);
+    }, [sortedAssignments, currentPage, assignmentsPerPage]);
 
+    const totalPages = Math.ceil(sortedAssignments.length / assignmentsPerPage);
+    // --- 페이지네이션 로직 끝 ---
+
+    // 상세 보기 핸들러 (기존과 동일)
+    const handleShowDetails = async (studentAssignment: StudentAssignment | undefined) => {
+        if (!studentAssignment || !studentAssignment.questionIds || studentAssignment.questionIds.length === 0) {
+            alert("상세 결과 데이터가 없습니다.");
+            return;
+        }
+        setIsModalLoading(true);
         try {
-            // 1. 'submissions' 컬렉션에서 상세 제출 기록을 조회
-            const submissionQuery = query(
-                collection(db, "submissions"),
-                where("userId", "==", studentId),
-                where("assignmentId", "==", assignmentId),
-                limit(1)
-            );
-            const submissionSnap = await getDocs(submissionQuery);
-
-            if (submissionSnap.empty) {
-                alert("상세 결과 데이터를 찾을 수 없습니다.");
-                setIsModalLoading(false);
-                return;
-            }
-
-            const detailedSubmission = { id: submissionSnap.docs[0].id, ...submissionSnap.docs[0].data() } as Submission;
-
-            // 2. 'questionBank'에서 문제 정보 가져오기 (결과 대시보드 로직과 동일)
-            const neededQIds = detailedSubmission.questionIds?.filter(id => !questions[id]) || [];
+            const neededQIds = studentAssignment.questionIds.filter(id => !questions[id]);
             if (neededQIds.length > 0) {
                 const chunks = [];
                 for (let i = 0; i < neededQIds.length; i += 30) {
@@ -125,16 +141,31 @@ export default function AssignmentStatusPage() {
                 }
                 setQuestions(prev => ({ ...prev, ...newQuestions }));
             }
-            setSelectedSubmission(detailedSubmission);
-
+            const submissionForModal: Submission = {
+                id: studentAssignment.id,
+                userId: studentAssignment.studentId,
+                studentId: studentAssignment.studentId,
+                assignmentId: studentAssignment.assignmentId,
+                classId: studentAssignment.classId,
+                questionIds: studentAssignment.questionIds,
+                answers: studentAssignment.answers,
+                score: studentAssignment.score as any,
+                completedAt: studentAssignment.completedAt,
+                createdAt: studentAssignment.completedAt,
+                isCompleted: studentAssignment.isCompleted,
+                academyId: studentAssignment.academyId,
+                academyName: studentAssignment.academyName,
+                isDeleted: false,
+                mainChapter: '학원 과제',
+            };
+            setSelectedData(submissionForModal);
         } catch (error) {
             console.error("상세 결과 로딩 중 오류 발생: ", error);
             alert("상세 결과를 불러오는 데 실패했습니다.");
         } finally {
-            setIsModalLoading(false); // 모달 로딩 종료
+            setIsModalLoading(false);
         }
     };
-    // --- 수정 끝 ---
     
     if (authLoading) {
         return <div className="flex h-full w-full items-center justify-center"><LoadingSpinner /></div>
@@ -165,68 +196,96 @@ export default function AssignmentStatusPage() {
                 <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-slate-200">
-                             <thead className="bg-slate-50">
-                                <tr>
-                                    <th className="table-header text-left sticky left-0 bg-slate-50 z-10 px-4 py-3 min-w-[120px]">학생 이름</th>
-                                    {assignments.sort((a,b) => a.dueDate.toMillis() - b.dueDate.toMillis()).map(assign => (
-                                        <th key={assign.id} colSpan={3} className="table-header text-center px-4 py-3 border-l" title={assign.title}>
-                                          <p className="font-semibold">{assign.title}</p>
-                                          <p className="text-xs font-normal text-slate-500 mt-1">
-                                            마감: {new Date(assign.dueDate.toMillis()).toLocaleDateString('ko-KR')}
-                                          </p>
-                                        </th>
-                                    ))}
-                                </tr>
-                                <tr>
-                                    <th className="table-header sticky left-0 bg-slate-50 z-10 px-4 py-2"></th>
-                                    {assignments.map(assign => (
-                                      <React.Fragment key={`${assign.id}-sub`}>
-                                        <th className="table-header text-center px-4 py-2 border-l font-normal">제출</th>
-                                        <th className="table-header text-center px-4 py-2 font-normal">점수</th>
-                                        <th className="table-header text-center px-4 py-2 font-normal">상세</th>
-                                      </React.Fragment>
-                                    ))}
-                                </tr>
-                             </thead>
-                             <tbody className="bg-white divide-y divide-slate-200">
-                                {students.length > 0 ? students.map(student => (
-                                    <tr key={student.id} className="hover:bg-slate-50">
-                                        <td className="px-4 py-3 font-medium text-slate-800 sticky left-0 bg-white z-10">{student.studentName}</td>
-                                        {assignments.map(assign => {
-                                            const submission = submissionMap.get(`${student.id}_${assign.id}`);
-                                            return (
-                                                <React.Fragment key={`${assign.id}-${student.id}`}>
-                                                  <td className="px-4 py-3 text-center border-l">
-                                                      {submission ? <span className="text-green-600 font-bold text-lg">✅</span> : <span className="text-red-500 text-lg">❌</span>}
-                                                  </td>
-                                                  <td className="px-4 py-3 text-center text-sm">
-                                                      {submission ? `${submission.score}점` : '-'}
-                                                  </td>
-                                                  <td className="px-4 py-3 text-center">
-                                                    {submission && (
-                                                      <button 
-                                                          onClick={() => handleShowDetails(student.id, assign.id)}
-                                                          className="text-blue-600 hover:text-blue-800 p-1 rounded-full hover:bg-blue-50"
-                                                          title="상세 결과 보기"
-                                                      >
-                                                          <FiFileText className="w-4 h-4" />
-                                                      </button>
-                                                    )}
-                                                  </td>
-                                                </React.Fragment>
-                                            )
-                                        })}
-                                    </tr>
-                                )) : (
+                                 <thead className="bg-slate-50">
                                      <tr>
-                                        <td colSpan={(assignments.length * 3) + 1} className="py-16 text-center text-slate-500">
-                                            선택된 수업에 등록된 학생이 없습니다.
-                                        </td>
-                                    </tr>
-                                )}
-                             </tbody>
+                                         {/* 📌 [수정] 학생 이름 열에 sticky 속성을 추가하여 화면에 고정시킵니다. */}
+                                         <th className="table-header text-left sticky left-0 bg-slate-50 z-10 px-4 py-3 min-w-[120px]">학생 이름</th>
+                                         {/* 📌 [수정] 전체 assignments 대신 paginatedAssignments를 사용합니다. */}
+                                         {paginatedAssignments.map(assign => (
+                                             <th key={assign.id} colSpan={3} className="table-header text-center px-4 py-3 border-l" title={assign.title}>
+                                                 <p className="font-semibold">{assign.title}</p>
+                                                 <p className="text-xs font-normal text-slate-500 mt-1">
+                                                     마감: {new Date(assign.dueDate.toMillis()).toLocaleDateString('ko-KR')}
+                                                 </p>
+                                             </th>
+                                         ))}
+                                     </tr>
+                                     <tr>
+                                         <th className="table-header sticky left-0 bg-slate-50 z-10 px-4 py-2"></th>
+                                         {paginatedAssignments.map(assign => (
+                                             <React.Fragment key={`${assign.id}-sub`}>
+                                                 <th className="table-header text-center px-4 py-2 border-l font-normal">제출</th>
+                                                 <th className="table-header text-center px-4 py-2 font-normal">점수</th>
+                                                 <th className="table-header text-center px-4 py-2 font-normal">상세</th>
+                                             </React.Fragment>
+                                         ))}
+                                     </tr>
+                                 </thead>
+                                 <tbody className="bg-white divide-y divide-slate-200">
+                                     {students.length > 0 ? students.map(student => (
+                                         <tr key={student.id} className="hover:bg-slate-50">
+                                             {/* 📌 [수정] 학생 이름 셀에도 sticky 속성을 적용합니다. */}
+                                             <td className="px-4 py-3 font-medium text-slate-800 sticky left-0 bg-white hover:bg-slate-50 z-10">{student.studentName}</td>
+                                             {paginatedAssignments.map(assign => {
+                                                 const studentAssignment = studentAssignmentMap.get(`${student.id}_${assign.id}`);
+                                                 return (
+                                                     <React.Fragment key={`${assign.id}-${student.id}`}>
+                                                         <td className="px-4 py-3 text-center border-l">
+                                                             {studentAssignment ? <span className="text-green-600 font-bold text-lg">✅</span> : <span className="text-red-500 text-lg">❌</span>}
+                                                         </td>
+                                                         <td className="px-4 py-3 text-center text-sm">
+                                                             {studentAssignment ? studentAssignment.score : '-'}
+                                                         </td>
+                                                         <td className="px-4 py-3 text-center">
+                                                             {studentAssignment && (
+                                                                 <button 
+                                                                     onClick={() => handleShowDetails(studentAssignment)}
+                                                                     className="text-blue-600 hover:text-blue-800 p-1 rounded-full hover:bg-blue-50"
+                                                                     title="상세 결과 보기"
+                                                                 >
+                                                                     <FiFileText className="w-4 h-4" />
+                                                                 </button>
+                                                             )}
+                                                         </td>
+                                                     </React.Fragment>
+                                                 )
+                                             })}
+                                         </tr>
+                                     )) : (
+                                         <tr>
+                                             <td colSpan={(paginatedAssignments.length * 3) + 1} className="py-16 text-center text-slate-500">
+                                                 선택된 수업에 등록된 학생이 없습니다.
+                                             </td>
+                                         </tr>
+                                     )}
+                                 </tbody>
                         </table>
                     </div>
+                    {/* --- 👇 [추가] 페이지네이션 컨트롤 UI --- */}
+                    {totalPages > 1 && (
+                        <div className="flex justify-center items-center p-4 border-t border-slate-200 bg-white">
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                disabled={currentPage === 1}
+                                className="p-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100"
+                                aria-label="Previous Page"
+                            >
+                                <FiChevronLeft className="w-5 h-5" />
+                            </button>
+                            <span className="px-4 text-sm font-medium">
+                                {currentPage} / {totalPages}
+                            </span>
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                disabled={currentPage === totalPages}
+                                className="p-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100"
+                                aria-label="Next Page"
+                            >
+                                <FiChevronRight className="w-5 h-5" />
+                            </button>
+                        </div>
+                    )}
+                    {/* --- 페이지네이션 UI 끝 --- */}
                      {assignments.length === 0 && students.length > 0 && 
                         <div className="py-16 text-center text-slate-500">
                             아직 생성된 과제가 없습니다. '과제 관리' 페이지에서 과제를 생성해주세요.
@@ -242,14 +301,15 @@ export default function AssignmentStatusPage() {
                     )}
                 </div>
             )}
-            {selectedSubmission && (
+            {selectedData && (
                 <DetailsModal 
-                    submission={selectedSubmission}
-                    student={students.find(s => s.id === selectedSubmission.userId)!}
+                    submission={selectedData}
+                    student={students.find(s => s.id === selectedData.userId)!}
                     questions={questions}
-                    onClose={() => setSelectedSubmission(null)}
+                    onClose={() => setSelectedData(null)}
                 />
             )}
         </div>
     )
 }
+
