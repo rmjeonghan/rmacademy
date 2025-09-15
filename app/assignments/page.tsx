@@ -224,7 +224,7 @@ export default function AssignmentsPage() {
                     </div>
                     <div>
                         <label className="form-label">3. 과제 이름</label>
-                        <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="예: 역학 시스템 정복" className="form-input" />
+                        <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="예: 1주차 역학 시스템" className="form-input" />
                     </div>
                     <div>
                       <h3 className="form-label">4. 과제 요일 및 마감일 선택</h3>
